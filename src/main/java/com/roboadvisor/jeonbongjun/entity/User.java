@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @Entity
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -28,11 +30,15 @@ public class User {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "last_activity_at")
+    private LocalDateTime lastActivityAt;
+
     @PrePersist
-    public void createUserIdIfNotExists() {
+    public void initializeDefaults() {
         if (this.userId == null) {
             this.userId = UUID.randomUUID().toString();
         }
+        this.lastActivityAt = LocalDateTime.now();
     }
 
     // User가 삭제되면 관련 포트폴리오도 삭제 (Cascade)
