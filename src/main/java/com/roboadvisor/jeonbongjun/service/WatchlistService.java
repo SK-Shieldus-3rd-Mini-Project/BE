@@ -6,6 +6,7 @@ import com.roboadvisor.jeonbongjun.entity.UserWatchlist;
 import com.roboadvisor.jeonbongjun.entity.Stock;
 import com.roboadvisor.jeonbongjun.exception.NotFoundException;
 import com.roboadvisor.jeonbongjun.repository.StockRepository;
+import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import com.roboadvisor.jeonbongjun.repository.UserWatchlistRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

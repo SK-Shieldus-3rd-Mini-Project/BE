@@ -4,6 +4,7 @@ import com.roboadvisor.jeonbongjun.entity.Stock;
 import com.roboadvisor.jeonbongjun.entity.User;
 import com.roboadvisor.jeonbongjun.entity.UserWatchlist;
 import com.roboadvisor.jeonbongjun.repository.StockRepository;
+import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import com.roboadvisor.jeonbongjun.repository.UserWatchlistRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
