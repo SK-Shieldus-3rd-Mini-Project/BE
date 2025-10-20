@@ -10,6 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -26,6 +27,13 @@ public class User {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    public void createUserIdIfNotExists() {
+        if (this.userId == null) {
+            this.userId = UUID.randomUUID().toString();
+        }
+    }
 
     // User가 삭제되면 관련 포트폴리오도 삭제 (Cascade)
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
