@@ -1,11 +1,12 @@
-package com.roboadvisor.jeonbongjun.watchlist.service;
+package com.roboadvisor.jeonbongjun.service;
 
-import com.roboadvisor.jeonbongjun.watchlist.dto.WatchlistDto;
+import com.roboadvisor.jeonbongjun.dto.WatchlistDto;
 import com.roboadvisor.jeonbongjun.entity.User;
 import com.roboadvisor.jeonbongjun.entity.UserWatchlist;
 import com.roboadvisor.jeonbongjun.entity.Stock;
-import com.roboadvisor.jeonbongjun.watchlist.exception.NotFoundException;
-import com.roboadvisor.jeonbongjun.watchlist.repository.*;
+import com.roboadvisor.jeonbongjun.exception.NotFoundException;
+import com.roboadvisor.jeonbongjun.repository.StockRepository;
+import com.roboadvisor.jeonbongjun.repository.UserWatchlistRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

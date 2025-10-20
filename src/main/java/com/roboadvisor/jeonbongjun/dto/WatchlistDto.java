@@ -1,4 +1,4 @@
-package com.roboadvisor.jeonbongjun.watchlist.dto;
+package com.roboadvisor.jeonbongjun.dto;
 
 import jakarta.validation.constraints.NotBlank;
 

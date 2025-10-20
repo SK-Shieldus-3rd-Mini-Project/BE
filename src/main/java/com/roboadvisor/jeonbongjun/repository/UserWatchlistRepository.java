@@ -1,4 +1,4 @@
-package com.roboadvisor.jeonbongjun.watchlist.repository;
+package com.roboadvisor.jeonbongjun.repository;
 
 import com.roboadvisor.jeonbongjun.entity.Stock;
 import com.roboadvisor.jeonbongjun.entity.User;

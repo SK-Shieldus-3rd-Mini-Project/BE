@@ -1,7 +1,7 @@
-package com.roboadvisor.jeonbongjun.watchlist.controller;
+package com.roboadvisor.jeonbongjun.controller;
 
-import com.roboadvisor.jeonbongjun.watchlist.dto.WatchlistDto;
-import com.roboadvisor.jeonbongjun.watchlist.service.WatchlistService;
+import com.roboadvisor.jeonbongjun.dto.WatchlistDto;
+import com.roboadvisor.jeonbongjun.service.WatchlistService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

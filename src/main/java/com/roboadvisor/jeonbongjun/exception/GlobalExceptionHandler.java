@@ -1,4 +1,4 @@
-package com.roboadvisor.jeonbongjun.watchlist.exception;
+package com.roboadvisor.jeonbongjun.exception;
 
 import org.springframework.http.*;
 import org.springframework.web.bind.MethodArgumentNotValidException;
