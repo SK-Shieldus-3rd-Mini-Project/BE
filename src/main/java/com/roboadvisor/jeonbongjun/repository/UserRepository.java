@@ -12,11 +12,7 @@ import java.time.LocalDateTime; // 임포트 추가
 @Repository
 public interface UserRepository extends JpaRepository<User, String> {
 
-    /**
-     * 특정 시간 이전에 마지막으로 활동한 사용자들을 모두 삭제합니다.
-     * @Modifying: DML(DELETE, UPDATE) 쿼리임을 알림
-     * @Transactional: 이 메서드는 트랜잭션 내부에서 실행되어야 함 (서비스단에서 추가)
-     */
+
     @Modifying
     @Query("DELETE FROM User u WHERE u.lastActivityAt < :cutoffDate")
     int deleteInactiveUsers(@Param("cutoffDate") LocalDateTime cutoffDate);
