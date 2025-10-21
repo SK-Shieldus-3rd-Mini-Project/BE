@@ -4,7 +4,7 @@ import com.roboadvisor.jeonbongjun.dto.WatchlistDto;
 import com.roboadvisor.jeonbongjun.entity.User;
 import com.roboadvisor.jeonbongjun.entity.UserWatchlist;
 import com.roboadvisor.jeonbongjun.entity.Stock;
-import com.roboadvisor.jeonbongjun.exception.NotFoundException;
+import com.roboadvisor.jeonbongjun.global.exception.NotFoundException;
 import com.roboadvisor.jeonbongjun.repository.StockRepository;
 import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import com.roboadvisor.jeonbongjun.repository.UserWatchlistRepository;

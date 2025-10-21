@@ -15,7 +15,6 @@ import java.util.List;
 public class PortfolioController {
 
     private final PortfolioService portfolioService;
-
     /**
      * API 명세: 보유 종목 추가 (POST)
      */
