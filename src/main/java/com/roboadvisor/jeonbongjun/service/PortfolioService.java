@@ -75,33 +75,22 @@ public class PortfolioService {
 
     /**
      * 3. 보유 종목 수정 (PUT)
-     * (기존 UserPortfolio 엔티티 수정 없이, Delete & Create 방식으로 구현)
+     * (기존 엔티티 조회 후 필드 값 변경 - 더티 체킹 활용)
      */
     @Transactional
     public PortfolioDto.Response updateStock(String userId, String stockId, PortfolioDto.UpdateRequest request) {
-        User user = findUserById(userId);
-        Stock stock = findStockById(stockId);
-
-        // 1. 기존 아이템 조회
+        // 1. 기존 아이템 조회 (User, Stock 정보는 필요 없으므로 portfolio만 조회)
         UserPortfolio existingItem = portfolioRepository.findByUserUserIdAndStockStockId(userId, stockId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PORTFOLIO_ITEM_NOT_FOUND));
 
-        // 2. 기존 아이템 삭제
-        portfolioRepository.delete(existingItem);
-        
-        // 3. 새 정보로 새 아이템 생성
-        UserPortfolio updatedItem = UserPortfolio.builder()
-                .user(user)
-                .stock(stock)
-                .quantity(request.getQuantity()) // 새 값
-                .avgPurchasePrice(request.getAvgPurchasePrice()) // 새 값
-                .build();
-        
-        // 4. 새 아이템 저장
-        portfolioRepository.save(updatedItem);
-        
-        // 새 아이템의 DTO 반환 (portfolio_id가 바뀜)
-        return PortfolioDto.Response.fromEntity(updatedItem);
+        // 2. 엔티티의 업데이트 메소드를 사용하여 값 변경
+        existingItem.updateInfo(request.getQuantity(), request.getAvgPurchasePrice());
+
+        // 3. 변경 감지(Dirty Checking)에 의해 자동으로 UPDATE 쿼리 실행됨
+        // portfolioRepository.save(existingItem); // 명시적으로 save 호출 불필요
+
+        // 업데이트된 엔티티의 DTO 반환
+        return PortfolioDto.Response.fromEntity(existingItem);
     }
 
     /**

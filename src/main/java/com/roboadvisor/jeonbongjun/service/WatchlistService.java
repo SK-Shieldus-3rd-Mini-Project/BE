@@ -25,7 +25,8 @@ public class WatchlistService {
 
     public List<WatchlistDto.ItemResponse> list(String userId) {
         var fmt = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-        return userWatchlistRepository.findByUser_UserId(userId)
+        // Fetch Join 쿼리 사용으로 변경
+        return userWatchlistRepository.findByUserIdWithStock(userId)
                 .stream()
                 .map(w -> new WatchlistDto.ItemResponse(
                         w.getStock().getStockId(),
