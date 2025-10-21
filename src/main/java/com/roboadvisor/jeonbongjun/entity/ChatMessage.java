@@ -48,5 +48,4 @@ public class ChatMessage {
             aiResponseDetail.setChatMessage(this);
         }
     }
-
 }
