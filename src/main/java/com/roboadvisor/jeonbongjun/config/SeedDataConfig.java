@@ -48,18 +48,22 @@ public class SeedDataConfig {
                 while ((line = reader.readLine()) != null) {
                     String[] data = line.split(","); // 콤마로 분리
 
-                    // KRX CSV 파일 형식에 맞게 인덱스 조정 (예시)
-                    // [0]: 종목코드, [1]: 종목명, [2]: 시장구분, ...
-                    String stockId = data[0].trim();
-                    String stockName = data[1].trim();
-                    String market = data[2].trim(); // KOSPI, KOSDAQ 등
+                    if (data.length < 7) {
+                        log.warn("CSV 라인 형식이 올바르지 않습니다. (컬럼 부족): {}", line);
+                        continue; // 이 라인은 건너뜀
+                    }
+
+                    String stockId = data[1].replaceAll("\"", "").trim();     // 2번 컬럼 (종목 코드)
+                    String market = data[6].replaceAll("\"", "").trim();      // 7번 컬럼 (시장 구분)
+                    String stockName = data[3].replaceAll("\"", "").trim();   // 4번 컬럼 (종목명/약칭)
+                    String tickerSymbol = data[0].replaceAll("\"", "").trim(); // 1번 컬럼 (표준 코드)
 
                     // 우리 Stock 엔티티 형식에 맞게 빌드
                     Stock stock = Stock.builder()
-                            .stockId(stockId)
-                            .stockName(stockName)
-                            .tickerSymbol(stockId)
-                            .market(market)
+                            .stockId(stockId)         // (CSV 2번)
+                            .market(market)         // (CSV 7번)
+                            .stockName(stockName)   // (CSV 4번)
+                            .tickerSymbol(tickerSymbol) // (CSV 1번)
                             .build();
 
                     stockList.add(stock);
