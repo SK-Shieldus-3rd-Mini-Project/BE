@@ -40,4 +40,9 @@ public class UserPortfolio {
     @UpdateTimestamp // 데이터가 변경될 때마다 자동 갱신
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
+
+    public void updateInfo(BigDecimal quantity, BigDecimal avgPurchasePrice) {
+        this.quantity = quantity;
+        this.avgPurchasePrice = avgPurchasePrice;
+    }
 }
