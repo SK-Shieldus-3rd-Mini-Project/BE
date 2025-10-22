@@ -27,8 +27,8 @@ public class ChatMessage {
     @Column(name = "sender")
     private String sender; // "USER" 또는 "AI"
 
-    @Lob // TEXT 타입 매핑
-    @Column(name = "content")
+    @Lob // TEXT 타입 매핑 <- 이미 @Lob이 적용되어 있네요!
+    @Column(name = "content", columnDefinition="TEXT") // <- columnDefinition 명시적으로 추가 (선택적)
     private String content;
 
     @CreationTimestamp

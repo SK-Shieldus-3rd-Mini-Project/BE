@@ -1,5 +1,8 @@
 package com.roboadvisor.jeonbongjun.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.roboadvisor.jeonbongjun.dto.AiResponseDto;
 import com.roboadvisor.jeonbongjun.dto.ChatDto;
 import com.roboadvisor.jeonbongjun.entity.ChatSession;
 import com.roboadvisor.jeonbongjun.entity.ChatMessage;
@@ -11,9 +14,14 @@ import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient; // 추가
+import reactor.core.publisher.Mono; // 추가
+import com.fasterxml.jackson.core.JsonProcessingException; // 추가
+import com.fasterxml.jackson.databind.ObjectMapper; // 추가
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +31,8 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final AiResponseDetailRepository aiResponseDetailRepository;
+    private final WebClient aiWebClient; // AI 서비스 통신용 WebClient 주입
+    private final ObjectMapper objectMapper; // JSON 변환용 ObjectMapper 주입
 
     @Transactional
     public Integer startSession(String userId, String title) {
@@ -78,35 +88,82 @@ public class ChatService {
 
     @Transactional
     public void sendQuery(Integer sessionId, String question) {
-        // 사용자의 질문 메시지 저장
-        ChatSession session = chatSessionRepository.findById(sessionId).orElseThrow(() -> new RuntimeException("Session not found"));
+        // 1. 사용자 질문 메시지 저장
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
-        ChatMessage userMessage = new ChatMessage();
-        userMessage.setSender("USER");
-        userMessage.setContent(question);
-        userMessage.setChatSession(session);
+        ChatMessage userMessage = ChatMessage.builder()
+                .sender("USER")
+                .content(question)
+                .chatSession(session)
+                .build();
+        chatMessageRepository.save(userMessage);
 
-        ChatMessage savedUserMessage = chatMessageRepository.save(userMessage);
+        // 2. AI 서비스(FastAPI) 호출
+        AiResponseDto aiResponse = callAiService(session.getSessionId().toString(), question) // 세션 ID를 String으로 변환
+                .block(); // 비동기 응답을 동기적으로 기다림 (실제 운영 환경에서는 비동기 처리 고려)
 
-        // AI의 응답 (단순한 하드코딩 또는 외부 API로 처리)
-        String aiResponse = "AI's response to: " + question;
+        if (aiResponse == null || aiResponse.getAnswer() == null) {
+            // AI 응답 실패 처리 (예: 기본 응답 또는 에러 로그)
+            saveAiMessage(session, "AI 응답을 처리하는 중 오류가 발생했습니다.", null);
+            // 에러 로깅 추가
+            System.err.println("AI service call failed or returned null response for session: " + sessionId);
+            return;
+        }
 
-        ChatMessage aiMessage = new ChatMessage();
-        aiMessage.setSender("AI");
-        aiMessage.setContent(aiResponse);
-        aiMessage.setChatSession(session);
+        // 3. AI 응답 메시지 및 상세 정보 저장
+        saveAiMessage(session, aiResponse.getAnswer(), aiResponse);
+    }
 
-        ChatMessage savedAiMessage = chatMessageRepository.save(aiMessage);
+    // AI 서비스 호출 로직 분리
+    private Mono<AiResponseDto> callAiService(String sessionId, String question) {
+        // FastAPI 요청 본문 생성 (main.py의 QueryRequest 모델 참고)
+        Map<String, String> requestBody = Map.of(
+                "session_id", sessionId,
+                "question", question
+        );
 
-        // AI 응답 상세 정보 저장
-        AiResponseDetail aiResponseDetail = new AiResponseDetail();
-        aiResponseDetail.setChatMessage(savedAiMessage);
-        aiResponseDetail.setEconomicDataUsed("economic data...");
-        aiResponseDetail.setSourceCitations("source citations...");
-        aiResponseDetail.setRelatedChartsMetadata("chart metadata...");
-        aiResponseDetail.setRelatedReports("reports...");
-        aiResponseDetail.setRagModelVersion("RAG model version...");
+        return aiWebClient.post()
+                .uri("/api/ai/query") // FastAPI 엔드포인트 경로
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(AiResponseDto.class)
+                .doOnError(error -> {
+                    // 에러 로깅 추가
+                    System.err.println("Error calling AI service: " + error.getMessage());
+                })
+                .onErrorResume(e -> Mono.empty()); // 오류 발생 시 빈 Mono 반환 (null 대신)
+    }
 
-        aiResponseDetailRepository.save(aiResponseDetail);
+    // AI 메시지 저장 로직 분리
+    private void saveAiMessage(ChatSession session, String content, AiResponseDto aiResponse) {
+        ChatMessage aiMessage = ChatMessage.builder()
+                .sender("AI")
+                .content(content)
+                .chatSession(session)
+                .build();
+
+        // AiResponseDetail 생성 및 설정
+        if (aiResponse != null) {
+            try {
+                AiResponseDetail detail = AiResponseDetail.builder()
+                        // sources 필드는 JSON 문자열로 저장 (List<Map> -> String)
+                        .sourceCitations(objectMapper.writeValueAsString(aiResponse.getSources()))
+                        // FastAPI 응답에는 economicDataUsed, relatedChartsMetadata, relatedReports, ragModelVersion이 없으므로 null 또는 기본값 처리
+                        .economicDataUsed(null) // 필요시 FastAPI 응답에 추가 후 매핑
+                        .relatedChartsMetadata(null) // 필요시 FastAPI 응답에 추가 후 매핑
+                        .relatedReports(null) // 필요시 FastAPI 응답에 추가 후 매핑
+                        .ragModelVersion(null) // 필요시 FastAPI 응답에 추가 후 매핑
+                        .build();
+                // ChatMessage와 AiResponseDetail 양방향 연관관계 설정
+                aiMessage.setAiResponseDetail(detail);
+            } catch (JsonProcessingException e) {
+                // JSON 변환 오류 로깅
+                System.err.println("Error converting sources to JSON string: " + e.getMessage());
+                // detail 없이 aiMessage만 저장하거나, 기본 detail 정보 저장
+            }
+        }
+
+        chatMessageRepository.save(aiMessage); // AiResponseDetail도 CascadeType.ALL로 함께 저장됨
     }
 }
