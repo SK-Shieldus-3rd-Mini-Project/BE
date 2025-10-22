@@ -12,19 +12,23 @@ import com.roboadvisor.jeonbongjun.repository.ChatMessageRepository;
 import com.roboadvisor.jeonbongjun.repository.AiResponseDetailRepository;
 import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient; // 추가
 import reactor.core.publisher.Mono; // 추가
 import com.fasterxml.jackson.core.JsonProcessingException; // 추가
 import com.fasterxml.jackson.databind.ObjectMapper; // 추가
+import reactor.core.scheduler.Schedulers;
+import org.springframework.context.annotation.Lazy; // Lazy 임포트 추가
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j // Slf4j 로거 사용
 @Service
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class ChatService {
 
     private final UserRepository userRepository;
@@ -33,6 +37,25 @@ public class ChatService {
     private final AiResponseDetailRepository aiResponseDetailRepository;
     private final WebClient aiWebClient; // AI 서비스 통신용 WebClient 주입
     private final ObjectMapper objectMapper; // JSON 변환용 ObjectMapper 주입
+    private final ChatService self; // 트랜잭션 분리를 위한 자기 자신 프록시 주입
+
+    // --- 생성자 직접 작성 ---
+    // self 파라미터에 @Lazy 추가
+    public ChatService(UserRepository userRepository,
+                       ChatSessionRepository chatSessionRepository,
+                       ChatMessageRepository chatMessageRepository,
+                       AiResponseDetailRepository aiResponseDetailRepository,
+                       WebClient aiWebClient,
+                       ObjectMapper objectMapper,
+                       @Lazy ChatService self) { // <- 여기에 @Lazy 추가!
+        this.userRepository = userRepository;
+        this.chatSessionRepository = chatSessionRepository;
+        this.chatMessageRepository = chatMessageRepository;
+        this.aiResponseDetailRepository = aiResponseDetailRepository;
+        this.aiWebClient = aiWebClient;
+        this.objectMapper = objectMapper;
+        this.self = self;
+    }
 
     @Transactional
     public Integer startSession(String userId, String title) {
@@ -86,9 +109,12 @@ public class ChatService {
         }).toList();
     }
 
-    @Transactional
+    /**
+     * 사용자 질문 저장 및 AI 서비스 비동기 호출 시작
+     * @Transactional 어노테이션 제거: AI 호출은 별도 트랜잭션에서 처리
+     */
     public void sendQuery(Integer sessionId, String question) {
-        // 1. 사용자 질문 메시지 저장
+        // 1. 사용자 질문 메시지 저장 (이 부분만 현재 트랜잭션에서 처리될 수 있음)
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
@@ -97,73 +123,84 @@ public class ChatService {
                 .content(question)
                 .chatSession(session)
                 .build();
-        chatMessageRepository.save(userMessage);
+        chatMessageRepository.save(userMessage); // 사용자 메시지 우선 저장
 
-        // 2. AI 서비스(FastAPI) 호출
-        AiResponseDto aiResponse = callAiService(session.getSessionId().toString(), question) // 세션 ID를 String으로 변환
-                .block(); // 비동기 응답을 동기적으로 기다림 (실제 운영 환경에서는 비동기 처리 고려)
+        // 2. AI 서비스 비동기 호출 및 결과 처리 시작 (block() 제거)
+        callAiService(session.getSessionId().toString(), question)
+                .publishOn(Schedulers.boundedElastic()) // DB 저장 등 블로킹 I/O 작업을 위한 스케줄러 지정
+                .doOnSuccess(aiResponse -> {
+                    if (aiResponse != null && aiResponse.getAnswer() != null) {
+                        log.info("AI 응답 수신 성공 (세션 ID: {}). DB 저장 시작...", sessionId);
+                        // AI 응답 DB 저장을 별도 트랜잭션으로 처리
+                        self.saveAiMessageInNewTransaction(sessionId, aiResponse.getAnswer(), aiResponse);
+                    } else {
+                        log.warn("AI 응답이 null 이거나 답변이 없습니다 (세션 ID: {}). 에러 메시지 저장.", sessionId);
+                        self.saveAiMessageInNewTransaction(sessionId, "AI 응답을 받지 못했습니다.", null);
+                    }
+                })
+                .doOnError(error -> {
+                    log.error("AI 서비스 호출 중 에러 발생 (세션 ID: {}): {}", sessionId, error.getMessage(), error);
+                    // AI 호출 에러 시 DB 저장을 별도 트랜잭션으로 처리
+                    self.saveAiMessageInNewTransaction(sessionId, "AI 응답 처리 중 오류가 발생했습니다.", null);
+                })
+                .subscribe(); // 비동기 작업 시작 (결과를 기다리지 않음)
 
-        if (aiResponse == null || aiResponse.getAnswer() == null) {
-            // AI 응답 실패 처리 (예: 기본 응답 또는 에러 로그)
-            saveAiMessage(session, "AI 응답을 처리하는 중 오류가 발생했습니다.", null);
-            // 에러 로깅 추가
-            System.err.println("AI service call failed or returned null response for session: " + sessionId);
-            return;
-        }
-
-        // 3. AI 응답 메시지 및 상세 정보 저장
-        saveAiMessage(session, aiResponse.getAnswer(), aiResponse);
+        log.info("AI 서비스 호출 시작됨 (세션 ID: {}). 컨트롤러는 즉시 응답합니다.", sessionId);
+        // 컨트롤러는 여기서 즉시 ResponseEntity.ok().build()를 반환함
     }
 
-    // AI 서비스 호출 로직 분리
+    /**
+     * AI 서비스 호출 (비동기 Mono 반환)
+     */
     private Mono<AiResponseDto> callAiService(String sessionId, String question) {
-        // FastAPI 요청 본문 생성 (main.py의 QueryRequest 모델 참고)
         Map<String, String> requestBody = Map.of(
                 "session_id", sessionId,
                 "question", question
         );
 
+        log.info("AI 서비스 호출 (세션 ID: {}, 질문: {})...", sessionId, question);
         return aiWebClient.post()
-                .uri("/api/ai/query") // FastAPI 엔드포인트 경로
+                .uri("/api/ai/query")
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(AiResponseDto.class)
-                .doOnError(error -> {
-                    // 에러 로깅 추가
-                    System.err.println("Error calling AI service: " + error.getMessage());
-                })
-                .onErrorResume(e -> Mono.empty()); // 오류 발생 시 빈 Mono 반환 (null 대신)
+                // onErrorResume 제거 또는 수정: 에러 발생 시 Mono.error() 유지하여 doOnError에서 처리하도록 함
+                .doOnError(error -> log.error("WebClient 에러 (세션 ID: {}): {}", sessionId, error.getMessage()));
+        // .onErrorResume(e -> Mono.empty()); // 필요 시 빈 응답 대신 에러 전파 고려
     }
 
-    // AI 메시지 저장 로직 분리
-    private void saveAiMessage(ChatSession session, String content, AiResponseDto aiResponse) {
+    /**
+     * AI 응답 메시지를 별도의 트랜잭션으로 저장
+     * @Transactional(propagation = Propagation.REQUIRES_NEW) : 항상 새 트랜잭션 시작
+     */
+    @Transactional // (propagation = Propagation.REQUIRES_NEW) // 필요 시 트랜잭션 전파 전략 명시
+    public void saveAiMessageInNewTransaction(Integer sessionId, String content, AiResponseDto aiResponse) {
+        log.info("별도 트랜잭션에서 AI 메시지 저장 시작 (세션 ID: {})...", sessionId);
+        // 세션 엔티티를 다시 조회 (지연 로딩 문제 방지 및 트랜잭션 분리)
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("saveAiMessage: Session not found: " + sessionId));
+
         ChatMessage aiMessage = ChatMessage.builder()
                 .sender("AI")
                 .content(content)
-                .chatSession(session)
+                .chatSession(session) // 조회한 세션 엔티티 사용
                 .build();
 
         // AiResponseDetail 생성 및 설정
         if (aiResponse != null) {
             try {
                 AiResponseDetail detail = AiResponseDetail.builder()
-                        // sources 필드는 JSON 문자열로 저장 (List<Map> -> String)
                         .sourceCitations(objectMapper.writeValueAsString(aiResponse.getSources()))
-                        // FastAPI 응답에는 economicDataUsed, relatedChartsMetadata, relatedReports, ragModelVersion이 없으므로 null 또는 기본값 처리
-                        .economicDataUsed(null) // 필요시 FastAPI 응답에 추가 후 매핑
-                        .relatedChartsMetadata(null) // 필요시 FastAPI 응답에 추가 후 매핑
-                        .relatedReports(null) // 필요시 FastAPI 응답에 추가 후 매핑
-                        .ragModelVersion(null) // 필요시 FastAPI 응답에 추가 후 매핑
+                        // 기타 필드 매핑 (FastAPI 응답에 따라 추가)
                         .build();
-                // ChatMessage와 AiResponseDetail 양방향 연관관계 설정
-                aiMessage.setAiResponseDetail(detail);
+                aiMessage.setAiResponseDetail(detail); // 연관관계 설정
             } catch (JsonProcessingException e) {
-                // JSON 변환 오류 로깅
-                System.err.println("Error converting sources to JSON string: " + e.getMessage());
-                // detail 없이 aiMessage만 저장하거나, 기본 detail 정보 저장
+                log.error("AI 응답 sources JSON 변환 실패 (세션 ID: {}): {}", sessionId, e.getMessage(), e);
+                // Detail 없이 메시지만 저장
             }
         }
 
-        chatMessageRepository.save(aiMessage); // AiResponseDetail도 CascadeType.ALL로 함께 저장됨
+        chatMessageRepository.save(aiMessage); // 메시지와 Detail(있다면) 저장
+        log.info("AI 메시지 저장 완료 (세션 ID: {})", sessionId);
     }
 }
