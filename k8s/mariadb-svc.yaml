@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb-svc # Service 이름 변경 (ConfigMap의 MYSQL_HOST와 일치)
+  namespace: jeonbongjun
+spec:
+  selector:
+    app: mariadb # StatefulSet의 Pod 라벨과 일치
+  ports:
+    - protocol: TCP
+      port: 3306
+      targetPort: 3306
+  type: ClusterIP

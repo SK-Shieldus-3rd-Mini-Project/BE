@@ -44,7 +44,7 @@ public class NewsService {
                         .queryParam("keyword", "경제 OR AI OR 투자 OR 금리")
                         .queryParam("date_from", today)
                         .queryParam("date_to", today)
-                        .queryParam("page_size", 5)
+                        .queryParam("page_size", 20)
                         .queryParam("order", "published_at") // 최신순
                         .queryParam("highlight", "unified") // 요약본 포함
                         .build())

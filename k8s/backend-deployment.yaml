@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: jeonbongjun
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend-container
+          # !! image: 주소는 GitHub Actions에서 업데이트 예정 !!
+          image: o11117/backend:latest
+          ports:
+            - containerPort: 8080
+          env:
+            # --- Root 비밀번호 사용 ---
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: jeonbongjun-secrets
+                  key: MYSQL_ROOT_PASSWORD # Root 비밀번호 Secret 참조
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root" # 사용자 이름을 'root'로 고정
+            - name: DEEPSEARCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jeonbongjun-secrets
+                  key: DEEPSEARCH_API_KEY
+            # --- ConfigMap 참조 ---
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mariadb://$(MYSQL_HOST):$(MYSQL_PORT)/$(MYSQL_DATABASE)?useSSL=false&allowPublicKeyRetrieval=true" # jdbc:mysql -> jdbc:mariadb
+            - name: MYSQL_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: MYSQL_HOST # ConfigMap의 MYSQL_HOST (mariadb-svc)
+            - name: MYSQL_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: MYSQL_PORT
+            - name: MYSQL_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: MYSQL_DATABASE
+            - name: SPRING_REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: REDIS_HOST
+            - name: AI_SERVER_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: AI_SERVICE_URL

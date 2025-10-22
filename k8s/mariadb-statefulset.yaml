@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mariadb # 이름 변경 (mysql -> mariadb)
+  namespace: jeonbongjun
+spec:
+  serviceName: "mariadb-svc" # 아래 Service 이름과 일치
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb # 라벨 변경
+  template:
+    metadata:
+      labels:
+        app: mariadb # 라벨 변경
+    spec:
+      containers:
+        - name: mariadb # 컨테이너 이름 변경
+          image: mariadb:10.11 # MariaDB 이미지 사용 (원하는 버전 선택)
+          ports:
+            - containerPort: 3306
+              name: mysql # 포트 이름은 mysql 유지 가능 (호환성)
+          env:
+            # Root 비밀번호만 Secret에서 가져옴
+            - name: MARIADB_ROOT_PASSWORD # 환경 변수 이름 변경 (MySQL -> MariaDB)
+              valueFrom:
+                secretKeyRef:
+                  name: jeonbongjun-secrets
+                  key: MYSQL_ROOT_PASSWORD # Secret 키 이름은 유지
+            # DB 이름은 ConfigMap에서 가져옴
+            - name: MARIADB_DATABASE # 환경 변수 이름 변경
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: MYSQL_DATABASE # ConfigMap 키 이름은 유지
+            # MYSQL_USER, MYSQL_PASSWORD 환경 변수 제거
+          volumeMounts:
+            - name: mariadb-persistent-storage # 볼륨 이름 변경
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: mariadb-persistent-storage # 볼륨 이름 변경
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 10Gi
+        # storageClassName: "standard"
