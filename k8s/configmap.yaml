@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jeonbongjun-config
+  namespace: jeonbongjun
+data:
+  # MySQL 설정
+  MYSQL_DATABASE: "jbj_db" # 사용할 DB 이름
+  MYSQL_HOST: "mariadb-svc"       # MySQL Service 이름 (아래에서 정의)
+  MYSQL_PORT: "3306"
+
+  # Redis 설정
+  REDIS_HOST: "redis-svc"       # Redis Service 이름 (Redis 배포 시 생성)
+  REDIS_PORT: "6379"
+
+  # AI Service 설정
+  AI_SERVICE_URL: "http://ai-svc:8000" # AI Service 이름 (아래에서 정의)
+
+  # Frontend 설정 (빌드 시 사용될 수도 있음)
+  # 외부에서 백엔드에 접근할 URL (Ingress나 LoadBalancer 주소)
+  # 예시: VITE_API_BASE_URL: "http://your-domain.com"
+  # 또는 GKE LoadBalancer IP: "http://<EXTERNAL_IP>"
+  # 우선 비워두거나, 클러스터 내부 주소로 설정
+  VITE_API_BASE_URL: "http://<EXTERNAL_IP>" # LoadBalancer IP 또는 Ingress 도메인
