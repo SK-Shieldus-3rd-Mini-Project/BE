@@ -34,8 +34,6 @@ spec:
                   name: jeonbongjun-secrets
                   key: DEEPSEARCH_API_KEY
             # --- ConfigMap 참조 ---
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mariadb://$(MYSQL_HOST):$(MYSQL_PORT)/$(MYSQL_DATABASE)?useSSL=false&allowPublicKeyRetrieval=true" # jdbc:mysql -> jdbc:mariadb
             - name: MYSQL_HOST
               valueFrom:
                 configMapKeyRef:
@@ -51,11 +49,23 @@ spec:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: MYSQL_DATABASE
-            - name: SPRING_REDIS_HOST
+
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mariadb://$(MYSQL_HOST):$(MYSQL_PORT)/$(MYSQL_DATABASE)?useSSL=false&allowPublicKeyRetrieval=true"
+
+            - name: SPRING_DATA_REDIS_HOST
               valueFrom:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: REDIS_HOST
+
+                # ⬇️ Redis 포트 설정이 누락되어 추가해야 합니다.
+            - name: SPRING_DATA_REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: jeonbongjun-config
+                  key: REDIS_PORT
+
             - name: AI_SERVER_BASE_URL
               valueFrom:
                 configMapKeyRef:
