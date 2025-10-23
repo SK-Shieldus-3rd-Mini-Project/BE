@@ -59,14 +59,13 @@ spec:
                   name: jeonbongjun-config
                   key: REDIS_HOST
 
-                # ⬇️ Redis 포트 설정이 누락되어 추가해야 합니다.
             - name: SPRING_DATA_REDIS_PORT
               valueFrom:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: REDIS_PORT
 
-            - name: AI_SERVER_BASE_URL
+            - name: AI_API_BASE_URL
               valueFrom:
                 configMapKeyRef:
                   name: jeonbongjun-config
