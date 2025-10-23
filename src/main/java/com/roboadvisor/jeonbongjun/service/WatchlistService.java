@@ -45,7 +45,7 @@ public class WatchlistService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found: " + userId));
-        Stock stock = stockRepository.findById(stockId)
+        Stock stock = stockRepository.findByStockId(stockId)
                 .orElseThrow(() -> new NotFoundException("Stock not found: " + stockId));
 
         UserWatchlist wl = UserWatchlist.builder()
