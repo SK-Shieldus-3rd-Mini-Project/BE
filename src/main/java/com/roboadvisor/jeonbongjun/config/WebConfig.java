@@ -20,10 +20,4 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600);
     }
 
-    // --- AI 서비스 통신용 WebClient 빈 추가 ---
-    @Bean
-    public WebClient aiWebClient(WebClient.Builder webClientBuilder,
-                                 @Value("${ai.api.base-url}") String aiApiBaseUrl) { // application.properties 등에서 AI 서버 주소 주입
-        return webClientBuilder.baseUrl(aiApiBaseUrl).build();
-    }
 }
