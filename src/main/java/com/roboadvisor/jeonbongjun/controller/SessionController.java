@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class SessionController {
 
     private final SessionService sessionService;
-
     @GetMapping("/init")
     public ResponseEntity<SessionResponseDto> initSession(HttpSession session) {
         // Spring이 자동으로 쿠키를 보고 Redis에서 세션을 찾아 주입해줍니다.
