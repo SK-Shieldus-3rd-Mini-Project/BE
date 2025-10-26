@@ -13,15 +13,13 @@ import com.roboadvisor.jeonbongjun.repository.AiResponseDetailRepository;
 import com.roboadvisor.jeonbongjun.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier; // [추가]
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import reactor.core.scheduler.Schedulers;
-import org.springframework.context.annotation.Lazy;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,17 +33,16 @@ public class ChatService {
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final AiResponseDetailRepository aiResponseDetailRepository;
-    private final WebClient aiWebClient; // AI 서비스 통신용 WebClient
+    private final WebClient aiWebClient; // ★ AI 서비스 통신용 WebClient
     private final ObjectMapper objectMapper;
     private final ChatService self;
 
-
-    // --- 생성자 ---
+    // 생성자
     public ChatService(UserRepository userRepository,
                        ChatSessionRepository chatSessionRepository,
                        ChatMessageRepository chatMessageRepository,
                        AiResponseDetailRepository aiResponseDetailRepository,
-                       @Qualifier("aiWebClient") WebClient aiWebClient, // @Qualifier 추가
+                       @Qualifier("aiWebClient") WebClient aiWebClient,
                        ObjectMapper objectMapper,
                        @Lazy ChatService self) {
         this.userRepository = userRepository;
@@ -57,7 +54,9 @@ public class ChatService {
         this.self = self;
     }
 
-    // ... (startSession, listSessions, getMessages 메서드는 변경 없음) ...
+    /**
+     * 새 세션 시작
+     */
     @Transactional
     public Integer startSession(String userId, String title) {
         ChatSession session = new ChatSession();
@@ -68,6 +67,9 @@ public class ChatService {
         return savedSession.getSessionId();
     }
 
+    /**
+     * 채팅 세션 목록 조회
+     */
     public List<ChatDto.SessionResponse> listSessions(String userId) {
         List<ChatSession> sessions = chatSessionRepository.findByUser_UserId(userId);
         return sessions.stream().map(session -> {
@@ -81,11 +83,16 @@ public class ChatService {
         }).toList();
     }
 
+    /**
+     * 특정 세션의 메시지 조회
+     */
     @Transactional
     public List<ChatDto.MessageResponse> getMessages(Integer sessionId) {
         List<ChatMessage> messages = chatMessageRepository.findByChatSession_SessionId(sessionId);
         return messages.stream().map(message -> {
-            AiResponseDetail aiResponseDetail = aiResponseDetailRepository.findByChatMessage_MessageId(message.getMessageId()).orElse(null);
+            AiResponseDetail aiResponseDetail = aiResponseDetailRepository
+                    .findByChatMessage_MessageId(message.getMessageId())
+                    .orElse(null);
             return new ChatDto.MessageResponse(
                     message.getMessageId(),
                     message.getSender(),
@@ -101,14 +108,14 @@ public class ChatService {
         }).toList();
     }
 
-
     /**
-     * 사용자 질문 저장 및 AI 서비스 비동기 호출 시작
+     * 사용자 질문 저장 및 AI 서비스 비동기 호출
      */
     public void sendQuery(Integer sessionId, String question) {
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
 
+        // ★ 1. 사용자 질문 저장 (USER 메시지)
         ChatMessage userMessage = ChatMessage.builder()
                 .sender("USER")
                 .content(question)
@@ -116,21 +123,21 @@ public class ChatService {
                 .build();
         chatMessageRepository.save(userMessage);
 
-        // 2. AI 서비스 비동기 호출
+        // ★ 2. AI 서비스 비동기 호출
         callAiService(session.getSessionId().toString(), question)
                 .publishOn(Schedulers.boundedElastic())
                 .doOnSuccess(aiResponse -> {
                     if (aiResponse != null && aiResponse.getAnswer() != null) {
                         log.info("AI 응답 수신 성공 (세션 ID: {}). DB 저장 시작...", sessionId);
-                        self.saveAiMessageInNewTransaction(sessionId, aiResponse.getAnswer(), aiResponse);
+                        self.saveAiMessageInNewTransaction(sessionId, aiResponse);
                     } else {
-                        log.warn("AI 응답이 null 이거나 답변이 없습니다 (세션 ID: {}). 에러 메시지 저장.", sessionId);
-                        self.saveAiMessageInNewTransaction(sessionId, "AI 응답을 받지 못했습니다.", null);
+                        log.warn("AI 응답이 null 또는 답변이 없습니다 (세션 ID: {}).", sessionId);
+                        self.saveErrorMessageInNewTransaction(sessionId, "AI 응답을 받지 못했습니다.");
                     }
                 })
                 .doOnError(error -> {
                     log.error("AI 서비스 호출 중 에러 발생 (세션 ID: {}): {}", sessionId, error.getMessage(), error);
-                    self.saveAiMessageInNewTransaction(sessionId, "AI 응답 처리 중 오류가 발생했습니다.", null);
+                    self.saveErrorMessageInNewTransaction(sessionId, "AI 응답 처리 중 오류가 발생했습니다.");
                 })
                 .subscribe();
 
@@ -147,8 +154,10 @@ public class ChatService {
         );
 
         log.info("AI 서비스 호출 (세션 ID: {}, 질문: {})...", sessionId, question);
+
+        // ★ FastAPI의 /ai/query 엔드포인트 호출
         return aiWebClient.post()
-                .uri("/ai/query") // WebClientConfig에 설정된 baseUrl('http://127.0.0.1:8001') 기준
+                .uri("/ai/query")  // WebClientConfig에 설정된 baseUrl 기준
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(AiResponseDto.class)
@@ -159,33 +168,50 @@ public class ChatService {
      * AI 응답 메시지를 별도의 트랜잭션으로 저장
      */
     @Transactional
-    public void saveAiMessageInNewTransaction(Integer sessionId, String content, AiResponseDto aiResponse) {
+    public void saveAiMessageInNewTransaction(Integer sessionId, AiResponseDto aiResponse) {
         log.info("별도 트랜잭션에서 AI 메시지 저장 시작 (세션 ID: {})...", sessionId);
         ChatSession session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("saveAiMessage: Session not found: " + sessionId));
 
+        // ★ AI 메시지 생성
         ChatMessage aiMessage = ChatMessage.builder()
                 .sender("AI")
-                .content(content)
+                .content(aiResponse.getAnswer())
                 .chatSession(session)
                 .build();
 
-        // [수정됨]
-        // AiResponseDto에 실제로 있는 필드만 매핑합니다. (getSources()만 있다고 가정)
-        if (aiResponse != null && aiResponse.getSources() != null) {
+        // ★ AI 응답 상세 정보 저장 (출처 등)
+        if (aiResponse.getSources() != null && !aiResponse.getSources().isEmpty()) {
             try {
                 AiResponseDetail detail = AiResponseDetail.builder()
                         .sourceCitations(objectMapper.writeValueAsString(aiResponse.getSources()))
+                        .ragModelVersion(aiResponse.getCategory()) // 카테고리를 버전으로 활용
                         .build();
-                aiMessage.setAiResponseDetail(detail); // 연관관계 설정
+                aiMessage.setAiResponseDetail(detail); // 양방향 관계 설정
             } catch (JsonProcessingException e) {
                 log.error("AI 응답 sources JSON 변환 실패 (세션 ID: {}): {}", sessionId, e.getMessage(), e);
-            } catch (Exception e) {
-                log.error("AI 응답 DTO 필드 매핑 실패 (AiResponseDto: {}): {}", aiResponse, e.getMessage(), e);
             }
         }
 
         chatMessageRepository.save(aiMessage);
         log.info("AI 메시지 저장 완료 (세션 ID: {})", sessionId);
+    }
+
+    /**
+     * 에러 메시지 저장
+     */
+    @Transactional
+    public void saveErrorMessageInNewTransaction(Integer sessionId, String errorMessage) {
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
+
+        ChatMessage errorMsg = ChatMessage.builder()
+                .sender("AI")
+                .content(errorMessage)
+                .chatSession(session)
+                .build();
+
+        chatMessageRepository.save(errorMsg);
+        log.info("에러 메시지 저장 완료 (세션 ID: {})", sessionId);
     }
 }
