@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -18,15 +19,17 @@ public class WatchlistController {
 
     // 관심 종목 조회
     @GetMapping
-    public ResponseEntity<List<WatchlistDto.ItemResponse>> list(@PathVariable String userId) {
-        return ResponseEntity.ok(watchlistService.list(userId));
+    public Mono<ResponseEntity<List<WatchlistDto.ItemResponse>>> getWatchlist(@PathVariable String userId) {
+        return watchlistService.getWatchlist(userId)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 
     // 관심 종목 추가
     @PostMapping
     public ResponseEntity<Void> add(@PathVariable String userId,
                                     @Valid @RequestBody WatchlistDto.AddRequest req) {
-        watchlistService.add(userId, req.stockId());
+        watchlistService.add(userId, req.getStockId());
         return ResponseEntity.ok().build();
     }
 

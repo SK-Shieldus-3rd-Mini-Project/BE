@@ -33,7 +33,7 @@ public class PortfolioService {
     }
     
     private Stock findStockById(String stockId) {
-        return stockRepository.findById(stockId)
+        return stockRepository.findByStockId(stockId)
                 .orElseThrow(() -> new CustomException(ErrorCode.STOCK_NOT_FOUND));
     }
     // ---

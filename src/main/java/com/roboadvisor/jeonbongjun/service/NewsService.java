@@ -3,11 +3,11 @@ package com.roboadvisor.jeonbongjun.service;
 import com.roboadvisor.jeonbongjun.dto.NewsDto;
 import com.roboadvisor.jeonbongjun.dto.deepsearch.DeepSearchArticle;
 import com.roboadvisor.jeonbongjun.dto.deepsearch.DeepSearchResponse;
-// 1. HighlightDto를 import 해야 합니다. (이 파일은 아래 '주의사항' 참고)
 import com.roboadvisor.jeonbongjun.dto.deepsearch.HighlightDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono; // Mono 임포트
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -30,67 +30,92 @@ public class NewsService {
     }
 
     /**
-     * DeepSearch API를 호출하여 최신 경제/기술 뉴스를 가져옵니다.
+     * [신규] 특정 키워드(종목명)로 뉴스를 검색합니다. (StockDetailService용)
+     * 리액티브(Mono) 방식으로 반환합니다.
+     */
+    public Mono<List<NewsDto>> searchNews(String keyword) {
+        // 최근 3일간의 뉴스를 검색
+        String dateFrom = LocalDate.now().minusDays(3).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        String dateTo = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+
+        return deepSearchWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/v1/articles")
+                        .queryParam("api_key", this.apiKey)
+                        .queryParam("keyword", keyword) // 파라미터로 받은 키워드 사용
+                        .queryParam("date_from", dateFrom)
+                        .queryParam("date_to", dateTo)
+                        .queryParam("page_size", 10) // 상세 페이지에서는 10개만
+                        .queryParam("order", "published_at")
+                        .queryParam("highlight", "unified")
+                        .build())
+                .retrieve()
+                .bodyToMono(DeepSearchResponse.class)
+                .map(response -> {
+                    if (response == null || response.getData() == null) {
+                        return Collections.<NewsDto>emptyList();
+                    }
+                    return response.getData().stream()
+                            .map(this::mapArticleToNewsDto)
+                            .collect(Collectors.toList());
+                })
+                .onErrorReturn(Collections.emptyList()); // 에러 발생 시 빈 리스트 반환
+    }
+
+
+    /**
+     * DeepSearch API를 호출하여 최신 경제/기술 뉴스를 가져옵니다. (기존 메서드)
+     * (이 메서드는 block()을 사용하므로 StockDetailService에서 사용 X)
      */
     public List<NewsDto> getLatestMarketNews() {
 
         String today = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
 
-        // API 호출 부분은 기존 코드와 동일합니다.
         DeepSearchResponse response = deepSearchWebClient.get()
                 .uri(uriBuilder -> uriBuilder
-                        .path("/v1/articles") // 키워드 검색
+                        .path("/v1/articles")
                         .queryParam("api_key", this.apiKey)
                         .queryParam("keyword", "경제 OR AI OR 투자 OR 금리")
                         .queryParam("date_from", today)
                         .queryParam("date_to", today)
                         .queryParam("page_size", 20)
-                        .queryParam("order", "published_at") // 최신순
-                        .queryParam("highlight", "unified") // 요약본 포함
+                        .queryParam("order", "published_at")
+                        .queryParam("highlight", "unified")
                         .build())
                 .retrieve()
                 .bodyToMono(DeepSearchResponse.class)
-                .block();
+                .block(); // 블로킹 호출
 
         if (response == null || response.getData() == null) {
             return Collections.emptyList();
         }
 
         return response.getData().stream()
-                .map(this::mapArticleToNewsDto) // 2. 이 매핑 로직이 수정되었습니다.
+                .map(this::mapArticleToNewsDto)
                 .collect(Collectors.toList());
     }
 
     /**
      * DeepSearch 응답(DeepSearchArticle)을 프론트엔드 DTO(NewsDto)로 변환합니다.
-     * Postman 응답을 기준으로 필드명을 매핑합니다.
+     * (기존 코드와 동일)
      */
     private NewsDto mapArticleToNewsDto(DeepSearchArticle article) {
 
-        // --- [매핑 로직 수정] ---
-
-        // 1. 카드 요약 (Postman의 highlight.content 배열의 첫 번째 값)
         String summaryHighlight = null;
-        // (DeepSearchArticle에 HighlightDto highlight 필드가 있어야 함)
         if (article.getHighlight() != null && article.getHighlight().getContent() != null && !article.getHighlight().getContent().isEmpty()) {
             summaryHighlight = article.getHighlight().getContent().get(0);
         }
 
-        // 2. 모달 본문 (Postman의 summary 필드)
-        // (DeepSearchArticle에 String summary 필드가 있어야 함)
         String fullContent = article.getSummary();
-
-        // 3. 원문 URL (Postman의 content_url 필드)
-        // (DeepSearchArticle에 String contentUrl 필드가 있어야 함)
         String url = article.getContentUrl();
 
         return NewsDto.builder()
                 .id(article.getId())
                 .title(article.getTitle())
                 .press(article.getPublisher())
-                .summary(summaryHighlight) // 카드 요약
-                .fullContent(fullContent) // 모달 본문 (API의 summary를 사용)
-                .url(url) // 원문 링크
+                .summary(summaryHighlight)
+                .fullContent(fullContent)
+                .url(url)
                 .build();
     }
 }

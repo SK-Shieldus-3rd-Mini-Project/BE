@@ -1,10 +1,8 @@
 package com.roboadvisor.jeonbongjun.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,10 +29,12 @@ public class Stock {
     private String market;
 
     // Stock 정보가 포트폴리오에서 참조됨
+    @JsonIgnore
     @OneToMany(mappedBy = "stock")
     private List<UserPortfolio> portfolioList = new ArrayList<>();
 
     // Stock 정보가 관심 목록에서 참조됨
+    @JsonIgnore
     @OneToMany(mappedBy = "stock")
     private List<UserWatchlist> watchList = new ArrayList<>();
 }
