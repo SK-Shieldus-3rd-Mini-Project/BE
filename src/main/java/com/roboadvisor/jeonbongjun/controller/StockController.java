@@ -8,14 +8,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/stocks")
@@ -23,7 +20,7 @@ import java.util.List;
 public class StockController {
 
     private final StockRepository stockRepository;
-    private final StockDetailService stockDetailService; // 신규 상세 서비스 주입
+    private final StockDetailService stockDetailService;
 
     /**
      * 종목 검색 (상위 10개)
@@ -31,22 +28,31 @@ public class StockController {
     @GetMapping("/search")
     public ResponseEntity<List<Stock>> searchStocks(@RequestParam("query") String query) {
         Pageable pageable = PageRequest.of(0, 10);
-
-        // [수정됨]
-        // 레포지토리(StockRepository.java)에 정의된 메서드명으로 수정
         List<Stock> stocks = stockRepository.findByStockNameContainingIgnoreCase(query, pageable);
-
         return ResponseEntity.ok(stocks);
     }
 
     /**
-     * [신규] 종목 상세 정보 API
-     * Alpha Vantage, DeepSearch 등 여러 API의 데이터를 조합하여 반환합니다.
+     * ★ 신규: 종목명으로 종목 코드 조회 (AI 서비스용)
+     * 예: GET /api/stocks/name/삼성전자 → {"stockId": "005930", "stockName": "삼성전자"}
+     */
+    @GetMapping("/name/{stockName}")
+    public ResponseEntity<Stock> getStockByName(@PathVariable String stockName) {
+        Pageable pageable = PageRequest.of(0, 1);
+        List<Stock> stocks = stockRepository.findByStockNameContainingIgnoreCase(stockName, pageable);
+
+        if (stocks.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(stocks.get(0));
+    }
+
+    /**
+     * 종목 상세 정보 API (기존)
      */
     @GetMapping("/{stockCode}")
     public Mono<StockDetailResponse> getStockDetail(@PathVariable String stockCode) {
-        // 참고: StockDetailService 에서는 stockCode(stockId)를 사용하여
-        // stockRepository.findByStockId(stockCode) 를 호출해야 합니다.
         return stockDetailService.getStockDetail(stockCode);
     }
 }

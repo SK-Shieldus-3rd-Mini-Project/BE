@@ -2,16 +2,19 @@ package com.roboadvisor.jeonbongjun.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 /**
  * 경제지표 엔티티
- * 기준금리, M2, 환율, GDP 등 경제 데이터 저장
+ * 한국은행 기준금리, M2 통화량, 환율, GDP 등을 저장
  */
 @Entity
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,18 +26,36 @@ public class EconomicIndicator {
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    @Column(name = "record_date", nullable = false)
-    private LocalDate recordDate; // 기록 날짜
+    /**
+     * 지표 종류
+     * - BASE_RATE: 기준금리 (%)
+     * - M2: M2 통화량 (조원)
+     * - EXCHANGE_RATE: 원/달러 환율
+     * - GDP: GDP 성장률 (%)
+     * - CPI: 소비자물가지수 (전년대비 %)
+     */
+    @Column(name = "indicator_type", nullable = false, length = 50)
+    private String indicatorType;
 
-    @Column(name = "interest_rate", precision = 5, scale = 2)
-    private BigDecimal interestRate; // 기준금리 (예: 3.50%)
+    @Column(name = "indicator_name", nullable = false, length = 100)
+    private String indicatorName;
 
-    @Column(name = "m2", precision = 18, scale = 2)
-    private BigDecimal m2; // M2 통화량 (조원 단위)
+    @Column(name = "value", precision = 18, scale = 4, nullable = false)
+    private BigDecimal value;
 
-    @Column(name = "exchange_rate", precision = 10, scale = 2)
-    private BigDecimal exchangeRate; // 원/달러 환율 (예: 1320.50)
+    @Column(name = "unit", length = 20)
+    private String unit; // %, 조원, 원 등
 
-    @Column(name = "gdp", precision = 18, scale = 2)
-    private BigDecimal gdp; // GDP (조원 단위)
+    @Column(name = "reference_date", nullable = false)
+    private LocalDate referenceDate; // 데이터 기준일
+
+    @Column(name = "source", length = 100)
+    private String source; // 한국은행, 통계청 등
+
+    @UpdateTimestamp
+    @Column(name = "last_updated")
+    private LocalDateTime lastUpdated;
+
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description; // 설명
 }
