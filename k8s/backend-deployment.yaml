@@ -16,7 +16,7 @@ spec:
       containers:
         - name: backend-container
           # !! image: 주소는 GitHub Actions에서 업데이트 예정 !!
-          image: o11117/backend:1cebee26a6707ae43d66fee1d7f388fb58a76339
+          image: o11117/backend:latest
           ports:
             - containerPort: 8080
 
@@ -72,3 +72,4 @@ spec:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: AI_SERVICE_URL
+
