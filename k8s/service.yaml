@@ -5,6 +5,7 @@ metadata:
   namespace: jeonbongjun
   annotations:
     cloud.google.com/neg: '{"ingress": true}' # GKE Ingress와 연동하기 위한 어노테이션
+    cloud.google.com/backend-config: '{"default": "backend-health-config"}' # BackendConfig 참조
 spec:
   selector:
     app: backend # 이 Service가 연결될 Pod를 식별하는 라벨 (Deployment의 Pod 라벨과 일치)
