@@ -19,6 +19,14 @@ spec:
           image: o11117/backend:latest
           ports:
             - containerPort: 8080
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health # Spring Boot Actuator 헬스 체크 경로
+              port: 8080            # backend-svc 포트
+            initialDelaySeconds: 30 # DB/Redis 연결 시간 감안하여 30초 뒤 검사
+            periodSeconds: 10     # 10초마다 검사
+
           env:
             # --- Root 비밀번호 사용 ---
             - name: SPRING_DATASOURCE_PASSWORD
