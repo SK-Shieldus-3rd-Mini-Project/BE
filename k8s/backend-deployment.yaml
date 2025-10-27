@@ -72,8 +72,3 @@ spec:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: AI_SERVICE_URL
-
-        - name: redis-sidecar
-          image: redis:7-alpine # 경량 레디스 이미지 사용
-          ports:
-            - containerPort: 6379
