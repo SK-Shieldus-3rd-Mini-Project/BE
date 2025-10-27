@@ -127,8 +127,9 @@ public class ChatService {
                     }
                 })
                 .doOnError(error -> {
-                    log.error("❌ AI 서비스 호출 중 에러 (세션 ID: {}): {}", sessionId, error.getMessage(), error);
-                    self.saveAiErrorMessage(sessionId, "AI 응답 처리 중 오류가 발생했습니다.");
+                    log.error("AI 서비스 호출 중 에러 발생 (세션 ID: {}): {} | Stack: {}",
+                            sessionId, error.getMessage(), error.getClass().getSimpleName(), error);
+                    self.saveErrorMessageInNewTransaction(sessionId, "AI 응답 처리 중 오류가 발생했습니다.");
                 })
                 .subscribe();
 
@@ -197,5 +198,33 @@ public class ChatService {
 
         chatMessageRepository.save(aiMessage);
         log.info("✅ AI 에러 메시지 저장 완료 (세션 ID: {})", sessionId);
+    }
+    /**
+     * 에러 메시지 저장
+     */
+    @Transactional
+    public void saveErrorMessageInNewTransaction(Integer sessionId, String errorMessage) {
+        ChatSession session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found: " + sessionId));
+
+        // ★ 사용자 친화적인 에러 메시지
+        String userFriendlyMessage = "죄송합니다. 현재 질문에 대한 답변을 생성할 수 없습니다.\n\n" +
+                "다음과 같이 질문을 바꿔보시겠어요?\n" +
+                "• 더 구체적인 기업명이나 지표를 명시해주세요\n" +
+                "• 다른 방식으로 질문을 재구성해주세요\n\n" +
+                "예시:\n" +
+                "❌ \"투자 어떻게 해?\"\n" +
+                "✅ \"초보자를 위한 ETF 투자 전략을 알려주세요\"\n\n" +
+                "❌ \"시장 상황\"\n" +
+                "✅ \"현재 기준금리와 환율이 주식 시장에 미치는 영향은?\"";
+
+        ChatMessage errorMsg = ChatMessage.builder()
+                .sender("AI")
+                .content(userFriendlyMessage)
+                .chatSession(session)
+                .build();
+
+        chatMessageRepository.save(errorMsg);
+        log.info("에러 메시지 저장 완료 (세션 ID: {})", sessionId);
     }
 }
