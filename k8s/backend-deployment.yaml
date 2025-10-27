@@ -51,22 +51,21 @@ spec:
                   key: MYSQL_DATABASE
 
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mariadb://$(MYSQL_HOST):$(MYSQL_PORT)/$(MYSQL_DATABASE)?useSSL=false&allowPublicKeyRetrieval=true"
+              value: "jdbc:mariadb://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true"
 
             - name: SPRING_DATA_REDIS_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: jeonbongjun-config
-                  key: REDIS_HOST
-
+              value: "localhost"
             - name: SPRING_DATA_REDIS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: jeonbongjun-config
-                  key: REDIS_PORT
+              value: "6379"
 
+            # [수정] AI_API_BASE_URL을 backend-container의 env 섹션으로 이동
             - name: AI_API_BASE_URL
               valueFrom:
                 configMapKeyRef:
                   name: jeonbongjun-config
                   key: AI_SERVICE_URL
+
+        - name: redis-sidecar
+          image: redis:7-alpine # 경량 레디스 이미지 사용
+          ports:
+            - containerPort: 6379
