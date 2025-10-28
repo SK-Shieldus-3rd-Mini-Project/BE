@@ -10,12 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import org.springframework.util.StringUtils; // [추가]
+import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -26,6 +23,7 @@ public class StockDetailService {
     private final StockRepository stockRepository;
     private final AlphaVantageService alphaVantageService;
     private final NewsService newsService;
+    private final YahooFinanceService yahooFinanceService; // 신규 추가
 
     // [수정] 파싱 유틸리티 (빈 문자열 처리를 위해 StringUtils.hasText 사용)
     private long parseLong(String value) {
@@ -145,5 +143,37 @@ public class StockDetailService {
                             .build();
                 })
                 .doOnError(e -> log.error("StockDetailService 최종 .map 블록 에러: {}", e.getMessage(), e)); // [수정] 스택 트레이스 포함
+    }
+
+    // 기술 지표만 반환하는 서비스 메소드
+    public Mono<StockDetailResponse> getTechIndicators(String stockCode) {
+
+        // 💡 종목 코드를 DB에서 찾아 API 심볼 형식으로 변환
+        Stock stock = stockRepository.findByStockId(stockCode)
+                .orElseThrow(() -> new RuntimeException("Stock not found with id: " + stockCode));
+
+        String apiSymbol = stockCode + ".KS";
+        log.info("기술 지표 계산을 위해 API 심볼로 변환: {} -> {}", stockCode, apiSymbol);
+
+        // Yahoo Finance API를 사용하여 기술 지표를 가져옴
+        return yahooFinanceService.getTechnicalIndicators(apiSymbol)
+                .subscribeOn(Schedulers.boundedElastic()) // 비동기 처리
+                .map(techData -> {
+                    log.info("Yahoo Finance 기술 지표 - RSI: {}, MACD: {}, MA20: {}",
+                            techData.getRsi(), techData.getMacd(), techData.getMa20());
+
+                    // 기술 지표 DTO 설정
+                    StockDetailResponse.TechDto techDto = StockDetailResponse.TechDto.builder()
+                            .rsi(techData.getRsi())
+                            .macd(techData.getMacd())
+                            .ma20(techData.getMa20())
+                            .build();
+
+                    // 💡 추가: 차트 데이터도 포함하여 프론트엔드 업데이트 로직에 대응
+                    return StockDetailResponse.builder()
+                            .tech(techDto)
+                            .chart(techData.getChartData())
+                            .build();
+                });
     }
 }
