@@ -79,13 +79,16 @@ public class ChatService {
     }
 
     // ===== 3. 특정 세션의 메시지 조회 =====
+    // In jeonbongjun/service/ChatService.java
     @Transactional(readOnly = true)
     public List<ChatDto.MessageResponse> getMessages(Integer sessionId) {
-        List<ChatMessage> messages = chatMessageRepository.findByChatSession_SessionId(sessionId);
+        // Use the new method with JOIN FETCH
+        List<ChatMessage> messages = chatMessageRepository.findByChatSession_SessionIdWithDetails(sessionId); // <--- CHANGE HERE
+
         return messages.stream().map(message -> {
-            AiResponseDetail aiResponseDetail = aiResponseDetailRepository
-                    .findByChatMessage_MessageId(message.getMessageId())
-                    .orElse(null);
+            // Now, aiResponseDetail is already loaded, no extra query needed
+            AiResponseDetail aiResponseDetail = message.getAiResponseDetail(); // <--- Direct access
+
             return new ChatDto.MessageResponse(
                     message.getMessageId(),
                     message.getSender(),
