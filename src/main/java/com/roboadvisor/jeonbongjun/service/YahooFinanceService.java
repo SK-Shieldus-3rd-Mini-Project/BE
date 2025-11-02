@@ -215,7 +215,7 @@ public class YahooFinanceService {
 
     /**
      * 기술 지표 DTO
-     */ 
+     */
     @lombok.Builder
     @lombok.Data
     public static class TechnicalIndicators {
